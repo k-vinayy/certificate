@@ -1,0 +1,45 @@
+# Python Virtual Environment
+venv/
+.venv/
+ENV/
+env/
+
+# Python Cache & Compiled Code
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Backend Application Data & Uploads
+backend/.env
+backend/history.json
+backend/uploads/**/*
+backend/generated/**/*
+
+# Keep uploads folder structure but ignore uploaded files
+!backend/uploads/
+!backend/uploads/templates/
+!backend/uploads/signatures/
+!backend/uploads/fonts/
+!backend/uploads/data/
+
+# Keep generated directory but ignore generated files
+!backend/generated/
+!backend/generated/.gitkeep
+
+# Node Modules (Frontend)
+frontend/node_modules/
+node_modules/
+
+# Frontend Build & Dev artifacts
+frontend/dist/
+frontend/dist-ssr/
+*.local
+.eslintcache
+
+# OS Files
+.DS_Store
+Thumbs.db
