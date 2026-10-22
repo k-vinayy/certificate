@@ -14,13 +14,13 @@ export default function Settings() {
       try {
         const response = await apiService.getSmtpConfig();
         const data = response.data;
-        setValue('host', data.SMTP_HOST || '');
+        setValue('host', data.SMTP_HOST || 'smtp.gmail.com');
         setValue('port', data.SMTP_PORT || 587);
         setValue('email', data.SMTP_EMAIL || '');
-        // Do not auto-fill masked passwords directly into field to avoid submission errors
         setValue('password', '');
+        setValue('resend_api_key', data.RESEND_API_KEY ? '' : '');
       } catch (e) {
-        toast.error("Failed to load SMTP configuration");
+        toast.error("Failed to load email configuration");
       } finally {
         setFetching(false);
       }
@@ -33,11 +33,12 @@ export default function Settings() {
     try {
       await apiService.saveSmtpConfig({
         host: data.host,
-        port: parseInt(data.port),
+        port: parseInt(data.port) || 587,
         email: data.email,
         password: data.password,
+        resend_api_key: data.resend_api_key,
       });
-      toast.success("SMTP configurations updated successfully!");
+      toast.success("Email configurations updated successfully!");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to update configurations");
     } finally {
@@ -53,8 +54,8 @@ export default function Settings() {
             <SettingsIcon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg">SMTP Provider Settings</h3>
-            <p className="text-xs text-slate-500">Configure outbound email host servers and authorization credentials.</p>
+            <h3 className="font-semibold text-lg">Email Dispatch Settings</h3>
+            <p className="text-xs text-slate-500">Configure Resend API (recommended for cloud hosts like Render) or standard Gmail SMTP.</p>
           </div>
         </div>
 
@@ -65,67 +66,92 @@ export default function Settings() {
           </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">SMTP Host</label>
-                <div className="relative">
-                  <Server className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
-                  <input
-                    type="text"
-                    placeholder="e.g. smtp.gmail.com"
-                    {...register('host', { required: 'SMTP Host is required' })}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
-                  />
+            {/* Primary Recommended: Resend HTTPS API */}
+            <div className="p-5 bg-gradient-to-br from-indigo-50/50 to-blue-50/50 dark:from-indigo-950/20 dark:to-blue-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/20">
+                    Recommended for Render
+                  </span>
+                  <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">Resend API Key</label>
                 </div>
-                {errors.host && <p className="text-xs text-red-500 mt-1">{errors.host.message}</p>}
+                <a
+                  href="https://resend.com/api-keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                >
+                  Get free key on resend.com &rarr;
+                </a>
               </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">SMTP Port</label>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Render blocks direct SMTP socket connections on free tier. Using a Resend API key sends emails via HTTPS, which never gets blocked.
+              </p>
+              <div className="relative">
+                <Key className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
                 <input
-                  type="number"
-                  placeholder="e.g. 587 or 465"
-                  {...register('port', { required: 'SMTP Port is required' })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                  type="password"
+                  placeholder="re_123456789..."
+                  {...register('resend_api_key')}
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
                 />
-                {errors.port && <p className="text-xs text-red-500 mt-1">{errors.port.message}</p>}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="e.g. ambassador@gmail.com"
-                  {...register('email', { required: 'Email address is required' })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
-                />
-                {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
-              </div>
+            {/* Alternative: SMTP Settings */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Or Use Standard SMTP (Local / Unblocked Servers)
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">SMTP Host</label>
+                  <div className="relative">
+                    <Server className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. smtp.gmail.com"
+                      {...register('host')}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">App Password</label>
-                <div className="relative">
-                  <Key className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">SMTP Port</label>
                   <input
-                    type="password"
-                    placeholder="Enter App Password"
-                    {...register('password', { required: 'App Password is required' })}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    type="number"
+                    placeholder="e.g. 587 or 465"
+                    {...register('port')}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
                   />
                 </div>
-                {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
               </div>
-            </div>
 
-            <div className="p-4 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-2xl flex gap-3 text-xs text-blue-600 dark:text-blue-400">
-              <ShieldAlert className="w-5 h-5 shrink-0" />
-              <div className="space-y-1">
-                <h4 className="font-semibold">Security Note:</h4>
-                <p className="leading-relaxed">
-                  For Google SMTP servers, you must generate a secure **App Password** from your Google account settings under security. Do not use your primary password.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Sender Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. ambassador@gmail.com"
+                    {...register('email')}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">App Password</label>
+                  <div className="relative">
+                    <Key className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                    <input
+                      type="password"
+                      placeholder="Enter 16-char App Password"
+                      {...register('password')}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

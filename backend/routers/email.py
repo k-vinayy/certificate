@@ -22,10 +22,11 @@ sending_progress = {
 }
 
 class SMTPConfigModel(BaseModel):
-    host: str
-    port: int
-    email: str
-    password: str
+    host: Optional[str] = "smtp.gmail.com"
+    port: Optional[int] = 587
+    email: Optional[str] = ""
+    password: Optional[str] = ""
+    resend_api_key: Optional[str] = ""
 
 class SendMailsRequest(BaseModel):
     retry_failed_only: Optional[bool] = False
@@ -33,22 +34,25 @@ class SendMailsRequest(BaseModel):
 @router.get("/smtp-config")
 def get_smtp_settings():
     cfg = get_smtp_config()
-    # Mask password for security
+    # Mask password and api key for security
     masked_cfg = cfg.copy()
     if masked_cfg.get("SMTP_PASSWORD"):
         masked_cfg["SMTP_PASSWORD"] = "********"
+    if masked_cfg.get("RESEND_API_KEY"):
+        masked_cfg["RESEND_API_KEY"] = "re_********"
     return masked_cfg
 
 @router.post("/smtp-config")
 def save_smtp_settings(config: SMTPConfigModel):
     try:
         save_smtp_config(
-            host=config.host,
-            port=config.port,
-            email=config.email,
-            password=config.password
+            host=config.host or "smtp.gmail.com",
+            port=config.port or 587,
+            email=config.email or "",
+            password=config.password or "",
+            resend_api_key=config.resend_api_key or ""
         )
-        return {"message": "SMTP settings saved successfully"}
+        return {"message": "Email settings saved successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
 
@@ -82,12 +86,16 @@ def start_email_dispatch_task(retry_failed_only: bool):
         return
         
     smtp_server = None
+    cfg = get_smtp_config()
+    is_resend = bool(cfg.get("RESEND_API_KEY", "").strip())
+
     try:
-        try:
-            smtp_server = create_smtp_session(timeout=60)
-        except Exception as e:
-            print(f"Warning: Could not pre-establish SMTP session: {e}")
-            smtp_server = None
+        if not is_resend:
+            try:
+                smtp_server = create_smtp_session(timeout=60)
+            except Exception as e:
+                print(f"Warning: Could not pre-establish SMTP session: {e}")
+                smtp_server = None
 
         for entry in targets:
             name = entry.get("name")
@@ -151,10 +159,12 @@ def trigger_sending(req: SendMailsRequest, background_tasks: BackgroundTasks):
     if sending_progress["status"] == "sending":
         raise HTTPException(status_code=400, detail="Mailing job is already running.")
         
-    # Check SMTP configuration
+    # Check email configuration
     cfg = get_smtp_config()
-    if not cfg["SMTP_HOST"] or not cfg["SMTP_EMAIL"] or not cfg["SMTP_PASSWORD"]:
-        raise HTTPException(status_code=400, detail="SMTP credentials are not configured. Please save them in Settings first.")
+    has_resend = bool(cfg.get("RESEND_API_KEY", "").strip())
+    has_smtp = bool(cfg.get("SMTP_HOST") and cfg.get("SMTP_EMAIL") and cfg.get("SMTP_PASSWORD"))
+    if not has_resend and not has_smtp:
+        raise HTTPException(status_code=400, detail="Email credentials not configured. Please add your Resend API Key or SMTP credentials in Settings.")
         
     background_tasks.add_task(start_email_dispatch_task, req.retry_failed_only)
     return {"message": "Mailing job started in the background."}
