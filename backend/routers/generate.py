@@ -33,6 +33,7 @@ def find_uploaded_file(folder: str, prefix: str) -> Optional[str]:
     search_path = os.path.join(UPLOADS_DIR, folder, f"{prefix}.*")
     files = glob.glob(search_path)
     if files:
+        files.sort(key=os.path.getmtime, reverse=True)
         return files[0]
     return None
 

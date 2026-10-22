@@ -1,0 +1,11 @@
+{
+  "name": "certificate-generator",
+  "version": "1.0.0",
+  "description": "Certificate Generator & Automated Mailer",
+  "scripts": {
+    "dev:backend": "powershell -NoProfile -Command \"backend\\venv\\Scripts\\python.exe -m uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start.ps1",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start.ps1"
+  }
+}

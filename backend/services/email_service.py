@@ -32,7 +32,24 @@ def save_smtp_config(host: str, port: int, email: str, password: str):
     set_key(ENV_PATH, "SMTP_EMAIL", email)
     set_key(ENV_PATH, "SMTP_PASSWORD", password)
 
-def send_certificate_email(name: str, email: str, pdf_path: str) -> bool:
+def create_smtp_session(timeout: int = 60):
+    config = get_smtp_config()
+    if not config["SMTP_HOST"] or not config["SMTP_EMAIL"] or not config["SMTP_PASSWORD"]:
+        raise ValueError("SMTP configuration is incomplete. Please set it in Settings.")
+        
+    port = config["SMTP_PORT"]
+    if port == 465:
+        server = smtplib.SMTP_SSL(config["SMTP_HOST"], port, timeout=timeout)
+    else:
+        server = smtplib.SMTP(config["SMTP_HOST"], port, timeout=timeout)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        
+    server.login(config["SMTP_EMAIL"], config["SMTP_PASSWORD"])
+    return server
+
+def send_certificate_email(name: str, email: str, pdf_path: str, server=None) -> bool:
     config = get_smtp_config()
     
     if not config["SMTP_HOST"] or not config["SMTP_EMAIL"]:
@@ -70,19 +87,24 @@ Google Student Ambassador"""
         print(f"Error attaching PDF: {e}")
         return False
         
+    owns_server = False
+    active_server = server
     try:
-        # Connect to SMTP server
-        # Support both SSL and TLS
-        if config["SMTP_PORT"] == 465:
-            server = smtplib.SMTP_SSL(config["SMTP_HOST"], config["SMTP_PORT"], timeout=15)
-        else:
-            server = smtplib.SMTP(config["SMTP_HOST"], config["SMTP_PORT"], timeout=15)
-            server.starttls()
+        if active_server is None:
+            active_server = create_smtp_session(timeout=60)
+            owns_server = True
             
-        server.login(config["SMTP_EMAIL"], config["SMTP_PASSWORD"])
-        server.sendmail(config["SMTP_EMAIL"], email, msg.as_string())
-        server.close()
+        active_server.sendmail(config["SMTP_EMAIL"], email, msg.as_string())
         return True
     except Exception as e:
         print(f"SMTP error sending to {email}: {e}")
         raise e
+    finally:
+        if owns_server and active_server is not None:
+            try:
+                active_server.quit()
+            except Exception:
+                try:
+                    active_server.close()
+                except Exception:
+                    pass

@@ -4,6 +4,8 @@ import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import List, Dict, Any
 
+import glob
+
 router = APIRouter(prefix="/api")
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -18,12 +20,61 @@ DATA_DIR = os.path.join(UPLOADS_DIR, "data")
 for d in [TEMPLATES_DIR, SIGNATURES_DIR, FONTS_DIR, DATA_DIR]:
     os.makedirs(d, exist_ok=True)
 
+def cleanup_old_files(directory: str, prefix: str):
+    for f in glob.glob(os.path.join(directory, f"{prefix}.*")):
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+
+@router.get("/asset-status")
+def get_asset_status():
+    def get_info(folder, prefix):
+        search = os.path.join(UPLOADS_DIR, folder, f"{prefix}.*")
+        files = glob.glob(search)
+        if files:
+            files.sort(key=os.path.getmtime, reverse=True)
+            return {"uploaded": True, "filename": os.path.basename(files[0])}
+        return {"uploaded": False, "filename": ""}
+
+    excel_info = get_info("data", "participants")
+    excel_count = 0
+    participants = []
+    if excel_info["uploaded"]:
+        file_path = os.path.join(DATA_DIR, excel_info["filename"])
+        try:
+            df = pd.read_excel(file_path)
+            df.columns = [c.strip().lower() for c in df.columns]
+            name_col = next((c for c in df.columns if 'name' in c), None)
+            email_col = next((c for c in df.columns if 'email' in c), None)
+            if name_col and email_col:
+                for index, row in df.iterrows():
+                    name = str(row[name_col]).strip()
+                    email = str(row[email_col]).strip()
+                    if name and email and name.lower() != 'nan' and email.lower() != 'nan':
+                        participants.append({"name": name, "email": email})
+                excel_count = len(participants)
+        except Exception:
+            pass
+
+    return {
+        "template": get_info("templates", "template"),
+        "signature": get_info("signatures", "signature"),
+        "font": get_info("fonts", "custom_font"),
+        "excel": {
+            **excel_info,
+            "count": excel_count,
+            "participants": participants
+        }
+    }
+
 @router.post("/upload-template")
 async def upload_template(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in [".png", ".jpg", ".jpeg", ".pdf"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PNG, JPG, and PDF templates are supported.")
     
+    cleanup_old_files(TEMPLATES_DIR, "template")
     target_path = os.path.join(TEMPLATES_DIR, "template" + ext)
     
     # Save file
@@ -38,6 +89,7 @@ async def upload_signature(file: UploadFile = File(...)):
     if ext not in [".png", ".jpg", ".jpeg"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PNG, JPG, and JPEG signatures are supported.")
         
+    cleanup_old_files(SIGNATURES_DIR, "signature")
     target_path = os.path.join(SIGNATURES_DIR, "signature" + ext)
     
     with open(target_path, "wb") as buffer:
@@ -51,6 +103,7 @@ async def upload_font(file: UploadFile = File(...)):
     if ext not in [".ttf", ".otf"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only TTF and OTF font files are supported.")
         
+    cleanup_old_files(FONTS_DIR, "custom_font")
     target_path = os.path.join(FONTS_DIR, "custom_font" + ext)
     
     with open(target_path, "wb") as buffer:
@@ -64,6 +117,7 @@ async def upload_excel(file: UploadFile = File(...)):
     if ext not in [".xlsx", ".xls"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only Excel files (.xlsx, .xls) are supported.")
         
+    cleanup_old_files(DATA_DIR, "participants")
     target_path = os.path.join(DATA_DIR, "participants" + ext)
     
     with open(target_path, "wb") as buffer:
@@ -98,3 +152,4 @@ async def upload_excel(file: UploadFile = File(...)):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
+

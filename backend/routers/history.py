@@ -1,6 +1,7 @@
 import os
 import zipfile
 import io
+import glob
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from services.db_service import load_history, update_history_status
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/api")
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 GENERATED_DIR = os.path.join(BASE_DIR, "generated")
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 
 @router.get("/history")
 def get_history():
@@ -19,6 +21,24 @@ def get_history():
 def download_pdf(filename: str):
     # Sanitize path to prevent directory traversal
     clean_filename = os.path.basename(filename)
+    
+    # Handle template requests from position editor
+    if clean_filename.startswith("template"):
+        templates_dir = os.path.join(UPLOADS_DIR, "templates")
+        matching_files = glob.glob(os.path.join(templates_dir, "template.*"))
+        if matching_files:
+            matching_files.sort(key=os.path.getmtime, reverse=True)
+            file_path = matching_files[0]
+            ext = os.path.splitext(file_path)[1].lower()
+            media_type = "image/png" if ext == ".png" else "image/jpeg"
+            return FileResponse(
+                file_path,
+                media_type=media_type,
+                filename=os.path.basename(file_path),
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            )
+        raise HTTPException(status_code=404, detail="Template certificate image not found.")
+        
     file_path = os.path.join(GENERATED_DIR, clean_filename)
     
     if not os.path.exists(file_path):
@@ -27,7 +47,8 @@ def download_pdf(filename: str):
     return FileResponse(
         file_path,
         media_type="application/pdf",
-        filename=clean_filename
+        filename=clean_filename,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
 @router.get("/download-zip")

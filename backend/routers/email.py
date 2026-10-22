@@ -1,9 +1,10 @@
 import os
+import time
 import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from services.email_service import send_certificate_email, get_smtp_config, save_smtp_config
+from services.email_service import send_certificate_email, get_smtp_config, save_smtp_config, create_smtp_session
 from services.db_service import load_history, update_history_status
 
 router = APIRouter(prefix="/api")
@@ -68,8 +69,6 @@ def start_email_dispatch_task(retry_failed_only: bool):
     targets = []
     for entry in history:
         status = entry.get("status")
-        # If retry_failed_only, target entries that failed.
-        # Otherwise, send to anything generated or failed (skip already "Sent").
         if retry_failed_only:
             if status in ["Failed", "Failed Generation"]:
                 targets.append(entry)
@@ -82,33 +81,69 @@ def start_email_dispatch_task(retry_failed_only: bool):
         sending_progress["status"] = "idle"
         return
         
-    for entry in targets:
-        name = entry.get("name")
-        email = entry.get("email")
-        filename = entry.get("filename")
-        pdf_path = os.path.join(GENERATED_DIR, filename)
-        
-        sending_progress["current_recipient"] = f"{name} ({email})"
-        
-        # Verify file exists
-        if not os.path.exists(pdf_path):
-            sending_progress["failed"] += 1
-            update_history_status(email, "Failed")
-            continue
-            
+    smtp_server = None
+    try:
         try:
-            success = send_certificate_email(name, email, pdf_path)
-            if success:
+            smtp_server = create_smtp_session(timeout=60)
+        except Exception as e:
+            print(f"Warning: Could not pre-establish SMTP session: {e}")
+            smtp_server = None
+
+        for entry in targets:
+            name = entry.get("name")
+            email = entry.get("email")
+            filename = entry.get("filename")
+            pdf_path = os.path.join(GENERATED_DIR, filename)
+            
+            sending_progress["current_recipient"] = f"{name} ({email})"
+            
+            # Verify file exists
+            if not os.path.exists(pdf_path):
+                sending_progress["failed"] += 1
+                update_history_status(email, "Failed")
+                continue
+                
+            sent_successfully = False
+            for attempt in range(2):
+                try:
+                    if smtp_server is None:
+                        smtp_server = create_smtp_session(timeout=60)
+                    send_certificate_email(name, email, pdf_path, server=smtp_server)
+                    sent_successfully = True
+                    break
+                except Exception as e:
+                    print(f"Email attempt {attempt + 1} failed for {email}: {e}")
+                    if smtp_server is not None:
+                        try:
+                            smtp_server.quit()
+                        except Exception:
+                            try:
+                                smtp_server.close()
+                            except Exception:
+                                pass
+                        smtp_server = None
+                    if attempt == 0:
+                        time.sleep(2)
+                        
+            if sent_successfully:
                 sending_progress["sent"] += 1
                 update_history_status(email, "Sent")
             else:
                 sending_progress["failed"] += 1
                 update_history_status(email, "Failed")
-        except Exception:
-            sending_progress["failed"] += 1
-            update_history_status(email, "Failed")
-            
-    sending_progress["status"] = "completed"
+                
+            # Inter-message delay to avoid Gmail rate-limiting / spam flag
+            time.sleep(1.2)
+    finally:
+        if smtp_server is not None:
+            try:
+                smtp_server.quit()
+            except Exception:
+                try:
+                    smtp_server.close()
+                except Exception:
+                    pass
+        sending_progress["status"] = "completed"
 
 @router.post("/send-mails")
 def trigger_sending(req: SendMailsRequest, background_tasks: BackgroundTasks):

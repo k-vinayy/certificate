@@ -14,9 +14,9 @@ def load_config() -> Dict[str, Any]:
     if not os.path.exists(CONFIG_PATH):
         # Fallback default
         return {
-            "name": {"x": 50, "y": 50, "font_size": 58, "color": "#000000"},
-            "date": {"x": 20, "y": 80, "font_size": 24, "color": "#000000"},
-            "signature": {"x": 80, "y": 80, "width": 15, "height": 10}
+            "name": {"x": 50.3, "y": 49.0, "font_size": 210, "color": "#000000"},
+            "date": {"x": 18.4, "y": 82.5, "font_size": 92, "color": "#000000"},
+            "signature": {"x": 81.4, "y": 79.2, "width": 15, "height": 10}
         }
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -50,9 +50,9 @@ def generate_participant_certificate(
         
         # 1. Draw Name
         name_cfg = config.get("name", {})
-        x_pct = name_cfg.get("x", 50)
-        y_pct = name_cfg.get("y", 50)
-        start_font_size = name_cfg.get("font_size", 58)
+        x_pct = name_cfg.get("x", 50.3)
+        y_pct = name_cfg.get("y", 49.0)
+        start_font_size = name_cfg.get("font_size", 210)
         color_hex = name_cfg.get("color", "#000000")
         color_rgb = hex_to_rgb(color_hex)
         
@@ -63,7 +63,7 @@ def generate_participant_certificate(
         max_width = int(W * 0.85)
         
         # Name Fitting: reduce font size until it fits
-        while font_size > 12:
+        while font_size > 16:
             # Get text bounding box: (left, top, right, bottom)
             bbox = draw.textbbox((0, 0), name, font=font)
             text_w = bbox[2] - bbox[0]
@@ -77,28 +77,36 @@ def generate_participant_certificate(
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
         
-        # Centering calculations
-        name_x = int((W * (x_pct / 100)) - (text_w / 2))
-        name_y = int((H * (y_pct / 100)) - (text_h / 2))
+        # Exact optical centering calculations
+        name_x = int((W * (x_pct / 100)) - (text_w / 2) - bbox[0])
+        name_y = int((H * (y_pct / 100)) - (text_h / 2) - bbox[1])
         
         draw.text((name_x, name_y), name, font=font, fill=color_rgb)
         
         # 2. Draw Date
         date_cfg = config.get("date", {})
-        date_x_pct = date_cfg.get("x", 20)
-        date_y_pct = date_cfg.get("y", 80)
-        date_font_size = date_cfg.get("font_size", 24)
+        date_x_pct = date_cfg.get("x", 18.4)
+        date_y_pct = date_cfg.get("y", 82.5)
+        date_font_size = date_cfg.get("font_size", 92)
         date_color_hex = date_cfg.get("color", "#000000")
         date_color_rgb = hex_to_rgb(date_color_hex)
         
         date_font = ImageFont.truetype(font_path, date_font_size)
+        max_date_width = int(W * 0.30)
+        while date_font_size > 14:
+            date_bbox = draw.textbbox((0, 0), date_str, font=date_font)
+            if (date_bbox[2] - date_bbox[0]) <= max_date_width:
+                break
+            date_font_size -= 2
+            date_font = ImageFont.truetype(font_path, date_font_size)
+
         date_bbox = draw.textbbox((0, 0), date_str, font=date_font)
         date_w = date_bbox[2] - date_bbox[0]
         date_h = date_bbox[3] - date_bbox[1]
         
-        # Draw date centered on its configured x percentage coordinate (or left-aligned relative to it)
-        date_x = int((W * (date_x_pct / 100)) - (date_w / 2))
-        date_y = int((H * (date_y_pct / 100)) - (date_h / 2))
+        # Draw date centered on its configured coordinates
+        date_x = int((W * (date_x_pct / 100)) - (date_w / 2) - date_bbox[0])
+        date_y = int((H * (date_y_pct / 100)) - (date_h / 2) - date_bbox[1])
         
         draw.text((date_x, date_y), date_str, font=date_font, fill=date_color_rgb)
         
@@ -127,6 +135,6 @@ def generate_participant_certificate(
                     
         # Save as high-resolution PDF (300 DPI)
         output_path = os.path.join(GENERATED_DIR, output_filename)
-        img.save(output_path, "PDF", resolution=300.0, quality=100)
+        img.save(output_path, "PDF", resolution=300.0, quality=88, optimize=True)
         
         return output_path
