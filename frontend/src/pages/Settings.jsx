@@ -18,6 +18,7 @@ export default function Settings() {
         setValue('port', data.SMTP_PORT || 587);
         setValue('email', data.SMTP_EMAIL || '');
         setValue('password', '');
+        setValue('sendgrid_api_key', data.SENDGRID_API_KEY ? '' : '');
         setValue('resend_api_key', data.RESEND_API_KEY ? '' : '');
       } catch (e) {
         toast.error("Failed to load email configuration");
@@ -36,6 +37,7 @@ export default function Settings() {
         port: parseInt(data.port) || 587,
         email: data.email,
         password: data.password,
+        sendgrid_api_key: data.sendgrid_api_key,
         resend_api_key: data.resend_api_key,
       });
       toast.success("Email configurations updated successfully!");
@@ -55,7 +57,7 @@ export default function Settings() {
           </div>
           <div>
             <h3 className="font-semibold text-lg">Email Dispatch Settings</h3>
-            <p className="text-xs text-slate-500">Configure Resend API (recommended for cloud hosts like Render) or standard Gmail SMTP.</p>
+            <p className="text-xs text-slate-500">Configure SendGrid API (recommended for Render & personal Gmail) or standard SMTP.</p>
           </div>
         </div>
 
@@ -66,36 +68,48 @@ export default function Settings() {
           </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Primary Recommended: Resend HTTPS API */}
-            <div className="p-5 bg-gradient-to-br from-indigo-50/50 to-blue-50/50 dark:from-indigo-950/20 dark:to-blue-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl space-y-3">
+            {/* Primary Recommended: SendGrid HTTPS API */}
+            <div className="p-5 bg-gradient-to-br from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/20">
-                    Recommended for Render
+                    Recommended for Render (Personal Gmail)
                   </span>
-                  <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">Resend API Key</label>
+                  <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">SendGrid API Key</label>
                 </div>
                 <a
-                  href="https://resend.com/api-keys"
+                  href="https://app.sendgrid.com/settings/api_keys"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium"
                 >
-                  Get free key on resend.com &rarr;
+                  Get free key on sendgrid.com &rarr;
                 </a>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Render blocks direct SMTP socket connections on free tier. Using a Resend API key sends emails via HTTPS, which never gets blocked.
+                SendGrid allows you to verify your personal Gmail in 1 click (Single Sender Verification) and send up to 100 emails/day to any participant over HTTPS without Render port blocks.
               </p>
               <div className="relative">
                 <Key className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
                 <input
                   type="password"
-                  placeholder="re_123456789..."
-                  {...register('resend_api_key')}
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                  placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  {...register('sendgrid_api_key')}
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono"
                 />
               </div>
+            </div>
+
+            {/* Sender Email Address */}
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Sender Email Address (Your Verified Gmail)</label>
+              <input
+                type="email"
+                placeholder="e.g. yourname@gmail.com"
+                {...register('email')}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Must match the email you verify in SendGrid (or your Gmail for SMTP).</p>
             </div>
 
             {/* Alternative: SMTP Settings */}
@@ -131,17 +145,7 @@ export default function Settings() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Sender Email Address</label>
-                  <input
-                    type="email"
-                    placeholder="e.g. ambassador@gmail.com"
-                    {...register('email')}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">App Password</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Gmail App Password (If using SMTP)</label>
                   <div className="relative">
                     <Key className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
                     <input
