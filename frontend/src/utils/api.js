@@ -1,13 +1,9 @@
 import axios from 'axios';
 
-<<<<<<< HEAD
-const API_BASE = '/api';
-=======
 const rawBase = import.meta.env.VITE_API_BASE || '/api';
 const API_BASE = (rawBase.startsWith('http') && !rawBase.includes('/api')) 
   ? `${rawBase.replace(/\/+$/, '')}/api` 
   : rawBase.replace(/\/+$/, '');
->>>>>>> dbd8894 (Configure production deployment for Vercel and Render)
 
 const api = axios.create({
   baseURL: API_BASE,
